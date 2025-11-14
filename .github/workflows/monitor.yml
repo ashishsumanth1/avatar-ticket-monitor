@@ -1,0 +1,49 @@
+name: Avatar Ticket Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+      
+      - name: Check Avatar Tickets
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python3 << 'PYTHON'
+import os, requests, json
+from bs4 import BeautifulSoup
+from datetime import datetime
+
+webhook = os.environ.get('DISCORD_WEBHOOK_URL', '').strip()
+print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Avatar Monitor")
+
+if not webhook:
+    print("ERROR: No webhook")
+    exit(1)
+
+try:
+    print("Checking BFI IMAX...")
+    r = requests.get('https://whatson.bfi.org.uk/imax/Online/default.asp', headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+    soup = BeautifulSoup(r.content, 'html.parser')
+    text = soup.get_text().lower()
+    
+    if 'avatar' in text and any(k in text for k in ['book', 'tickets']):
+        print("✓ TICKETS FOUND!")
+        data = {"content": "🎉 AVATAR TICKETS NOW AVAILABLE!", "embeds": [{"title": "🎬 AVATAR RELEASED!", "description": "https://whatson.bfi.org.uk/imax/", "color": 3447003}]}
+        requests.post(webhook, json=data)
+    else:
+        print("✗ Not available yet")
+except Exception as e:
+    print(f"Error: {e}")
+PYTHON
